@@ -2,22 +2,32 @@
 
 namespace ChainOfResponsability.Api.Services.Validators;
 
-public class ImportFileValidator(IEntryContext context)
+public class ImportFileValidator(IEnumerable<IImportFileValidator> fileValidators)
 {
     public IEnumerable<string> Validate(ImportFile importFile)
     {
-        var headerValidator = new HeaderValidator(importFile);
-        var firstColumnValidator = new FirstColumnValidator(importFile);
-        var alreadyExistsEntry = new AlreadyExistsEntry(importFile, context);
-        firstColumnValidator.SetNextValidator(alreadyExistsEntry);
-        headerValidator.SetNextValidator(firstColumnValidator);
-        return headerValidator.Validate();
+        foreach (var validator in fileValidators)
+        {
+            var validation = validator.Validate(importFile);
+
+            if (validation.Any())
+            {
+                return validation;
+            }
+        }
+
+        return [];
     }
 }
 
-internal sealed class AlreadyExistsEntry(ImportFile importFile, IEntryContext context) : ImportFileValidatorBase(importFile)
+public interface IImportFileValidator
 {
-    public override IEnumerable<string> DescribeValidation()
+    IEnumerable<string> Validate(ImportFile importFile);
+}
+
+internal sealed class AlreadyExistsEntry(IEntryContext context) : IImportFileValidator
+{
+    public IEnumerable<string> Validate(ImportFile importFile)
     {
         var ids = importFile.Worksheet
               .Column(4)
@@ -35,9 +45,9 @@ internal sealed class AlreadyExistsEntry(ImportFile importFile, IEntryContext co
     }
 }
 
-internal sealed class HeaderValidator(ImportFile importFile) : ImportFileValidatorBase(importFile)
+internal sealed class HeaderValidator : IImportFileValidator
 {
-    public override IEnumerable<string> DescribeValidation()
+    public IEnumerable<string> Validate(ImportFile importFile)
     {
         var headers = importFile.Worksheet.RowsUsed().Skip(1).First();
 
@@ -53,11 +63,9 @@ internal sealed class HeaderValidator(ImportFile importFile) : ImportFileValidat
     }
 }
 
-internal sealed class FirstColumnValidator(ImportFile importFile) : ImportFileValidatorBase(importFile)
+internal sealed class FirstColumnValidator : IImportFileValidator
 {
-    private readonly ImportFile importFile = importFile;
-
-    public override IEnumerable<string> DescribeValidation()
+    public IEnumerable<string> Validate(ImportFile importFile)
     {
         var firstColumn = importFile.Worksheet.FirstColumnUsed().CellsUsed().Skip(2);
 
@@ -68,39 +76,5 @@ internal sealed class FirstColumnValidator(ImportFile importFile) : ImportFileVa
             return [];
         }
         return ["Valores na primeira coluna devem ser do tipo data."];
-    }
-}
-
-internal abstract class ImportFileValidatorBase(ImportFile importFile)
-{
-    public IEnumerable<string> Validations { get; private set; } = [];
-
-    private ImportFileValidatorBase? importFileValidatorBase;
-
-    public void SetNextValidator(ImportFileValidatorBase nextValidator)
-        => importFileValidatorBase = nextValidator;
-
-    public abstract IEnumerable<string> DescribeValidation();
-
-    public IEnumerable<string> Validate()
-    {
-        if (importFile == null)
-        {
-            return ["ImportFile cannot be null"];
-        }
-
-        Validations = DescribeValidation();
-
-        if (Validations.Any())
-        {
-            return Validations;
-        }
-
-        if (importFileValidatorBase == null)
-        {
-            return [];
-        }
-
-        return importFileValidatorBase.Validate();
     }
 }

@@ -9,6 +9,11 @@ builder.Services.AddControllers();
 builder.Services.AddEndpointsApiExplorer();
 builder.Services.AddSwaggerGen();
 builder.Services.AddScoped<IEntryContext, EntryContext>();
+
+builder.Services.AddScoped<IImportFileValidator, HeaderValidator>();
+builder.Services.AddScoped<IImportFileValidator, FirstColumnValidator>();
+builder.Services.AddScoped<IImportFileValidator, AlreadyExistsEntry>();
+
 builder.Services.AddScoped<ImportFileValidator>();
 builder.Services.AddScoped<ImportFileService>();
 
